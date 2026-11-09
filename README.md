@@ -47,6 +47,10 @@ Run the tests:
 node test/convert.test.js
 ```
 
+## Changes
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT, see [LICENSE](LICENSE). No warranty: check the numbers on your switcher before the show.

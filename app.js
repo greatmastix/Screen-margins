@@ -457,7 +457,10 @@
   }
 
   function renderPreview() {
-    const d = S.dst, W = +d.W, H = +d.H, fs = Math.max(W, H * 16 / 9) / 60;
+    const d = S.dst, W = +d.W, H = +d.H;
+    // text size in canvas units: 1/60 of the frame, but never below ~12 px on screen (phones)
+    const shown = svg.getBoundingClientRect().width || 800;
+    const fs = Math.max(Math.max(W, H * 16 / 9) / 60, 12 * W / shown);
     const r = n => Math.round(n * 100) / 100;
     const ve = 'vector-effect="non-scaling-stroke"';
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -472,7 +475,7 @@
       o.push(`<rect class="pip${i === sel ? ' sel' : ''}" data-i="${i}" x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}" fill="${c}" stroke="${c}" ${ve}/>`);
       const sp = srcFor(S.pips[i]);
       o.push(`<text class="lbl" x="${r(x + fs * .4)}" y="${r(y + fs * 1.2)}" font-size="${r(fs)}">${esc(S.pips[i].name || i + 1)}</text>`);
-      if (h > fs * 3.2) o.push(`<text class="modetxt" x="${r(x + fs * .4)}" y="${r(y + fs * 2.15)}" font-size="${r(fs * .62)}">given as ${esc(describe(sp))}</text>`);
+      if (h > fs * 3.2) o.push(`<text class="modetxt" x="${r(x + fs * .4)}" y="${r(y + fs * 2.15)}" font-size="${r(fs * .72)}">given as ${esc(describe(sp))}</text>`);
       const a = anchorFrac(d, b);
       if (a) o.push(`<circle class="anchor" cx="${r(a[0] * W)}" cy="${r(a[1] * H)}" r="${r(fs * .35)}" ${ve}/>`);
       for (const [fx, fy] of refPoints(sp, b)) {
@@ -523,6 +526,8 @@
     p.box = SM.toBox(sp, p.vals);
     updateRowInputs(drag.i); updateRow(drag.i); renderPreview();
   });
+  // label size depends on the on-screen width, so redraw when it changes
+  if (window.ResizeObserver) { let lastW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w !== lastW) { lastW = w; renderPreview(); } }).observe(svg.parentNode); }
   const endDrag = () => { if (drag) { drag = null; save(); } };
   svg.addEventListener('pointerup', endDrag);
   svg.addEventListener('pointercancel', endDrag);
