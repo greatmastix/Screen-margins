@@ -77,4 +77,47 @@ t('size helpers', () => {
   near(SM.sizeVal(atem, 0.25, 'x'), 0.25, 'scale'); near(SM.sizeVal(P({ unit: 'custom' }), 0.5, 'x'), 16, 'custom axis');
   near(SM.boxAspect(P(), { l: 0, t: 0, w: 1 / 3, h: 1 / 3 }), 16 / 9, 'aspect');
 });
+t('relative to another PiP', () => {
+  const ref = SM.toBox(P(), { x: 100, y: 100, w: 640, h: 360 });       // bottom-right at 740, 460
+  const rel = P({ pos: 'rel', relFrom: 'br', relTo: 'tl' });
+  const b = SM.toBox(rel, { rx: 20, ry: 20, w: 640, h: 360 }, ref);
+  near(b.l * 1920, 760, 'l'); near(b.t * 1080, 480, 't'); near(b.w * 1920, 640, 'w');
+  assert.strictEqual(SM.toBox(rel, { rx: 20, ry: 20, w: 640, h: 360 }), null, 'no ref -> null');
+  const back = SM.fromBox(rel, b, ref); near(back.rx, 20, 'rx'); near(back.ry, 20, 'ry');
+  // the other way round: PiP 1 hangs off PiP 2, offsets flip sign
+  const inv = SM.fromBox(P({ pos: 'rel', relFrom: 'tl', relTo: 'br' }), ref, b);
+  near(inv.rx, -20, 'inv rx'); near(inv.ry, -20, 'inv ry');
+  // y up and percent: +ΔY moves up
+  const up = P({ pos: 'rel', unit: 'pct', yUp: true, relFrom: 'tl', relTo: 'bl' });
+  const u = SM.toBox(up, { rx: 0, ry: 10, w: 10, h: 10 }, ref);
+  near(u.t + u.h, ref.t - 0.1, 'y up');
+  assert.deepStrictEqual(SM.fields(rel).map(f => f.key), ['rx', 'ry', 'w', 'h']);
+});
+t('sums in number fields', () => {
+  const e = SM.parseNum;
+  assert.strictEqual(e('200+10'), 210); assert.strictEqual(e(' 1920 - 640 '), 1280);
+  assert.strictEqual(e('(1920-640)/2'), 640); assert.strictEqual(e('2*3+4'), 10); assert.strictEqual(e('2+3*4'), 14);
+  assert.strictEqual(e('-(10+5)'), -15); assert.strictEqual(e('1,5*2'), 3); assert.strictEqual(e('1920x0.5'), 960);
+  assert.strictEqual(e('16÷2'), 8); assert.strictEqual(e('100+20px'), 120); assert.strictEqual(e('1e3+1'), 1001);
+  for (const bad of ['200+', '(1+2', '1/0', 'abc', '2**3', 'alert(1)', '']) assert.strictEqual(e(bad), null, bad);
+  assert.ok(SM.divByZero('200/0')); assert.ok(SM.divByZero('5/(2-2)')); assert.ok(!SM.divByZero('200/0+')); assert.ok(!SM.divByZero('200/2'));
+  assert.strictEqual(SM.parsePlain('200+10'), null); assert.strictEqual(e('640'), 640); assert.strictEqual(e('50%'), 50);
+});
+t('pdf writer: valid structure', () => {
+  const PDF = require('../pdf.js');
+  assert.strictEqual(PDF.winAnsi('ΔX → 5 – “a” 🤡'), 'dX -> 5 \x96 \x93a\x94 ?');
+  near(PDF.width('0000', 10), 22.24, 'digit widths');
+  assert.deepStrictEqual(PDF.wrap('one two three', 10, PDF.width('one two', 10)), ['one two', 'three']);
+  const doc = PDF.create(842, 595);
+  doc.page().text(10, 10, 'Hi (there) \\ Δ').line(0, 0, 10, 10).rect(5, 5, 20, 20, { fill: '#ff0000' })
+    .image(doc.addJpeg(new Uint8Array([0xff, 0xd8, 0xff, 0xd9]), 1, 1), 0, 0, 10, 10);
+  doc.page().text(10, 10, 'page 2', { bold: true, align: 'right' });
+  const b = Buffer.from(doc.bytes()), txt = b.toString('latin1');
+  assert.ok(txt.startsWith('%PDF-1.4') && txt.trimEnd().endsWith('%%EOF'));
+  const xref = +/startxref\n(\d+)/.exec(txt)[1];
+  assert.ok(txt.startsWith('xref', xref), 'startxref points at xref');
+  const offs = txt.slice(xref).split('\n').slice(3).filter(l => / n $/.test(l)).map(l => parseInt(l, 10));
+  offs.forEach((o, i) => assert.ok(txt.startsWith(`${i + 1} 0 obj`, o), `object ${i + 1} offset`));
+  assert.ok(txt.includes('(Hi \\(there\\) \\\\ d) Tj') && txt.includes('/Count 2'));
+});
 console.log(`ok, ${n} tests`);

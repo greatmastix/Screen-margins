@@ -16,8 +16,17 @@ Everything runs in the browser. There is no server, and profiles and PiPs are sa
   - size: same units as the position, or a scale where 1 / 100 % = full frame (optionally one value that keeps the aspect)
 - **Switcher presets** (see below), plus your own saved profiles.
 - **PiP table.** Add as many PiPs as you need. Each row can use its own position format, and each has an aspect lock between W and H: type whichever one is given, and the other follows. You can paste straight from a spreadsheet or a PDF. Click a result to copy it, or use "Copy results" for the whole table (tab-separated).
+- **Relative PiPs.** A row can be positioned from another PiP: pick a point on the reference (e.g. its bottom-right), a point on this PiP (e.g. its top-left) and the offset ΔX / ΔY between them. Optionally it keeps the reference's size. Moving the reference moves everything that hangs off it. The target values are always absolute positions.
+- **Sums in number fields.** Type `200+10` or `(1920-640)/2`; Enter or leaving the field replaces the sum with the result.
 - **Preview.** Drag PiPs to move them, and use the corner handle to resize. For the selected PiP, solid lines show what each source number measures and dashed lines show what each target number measures, each labelled with its value.
 - **Layout generator.** Lays out N equal PiPs in a grid with outer margins, gaps and an aspect ratio.
+- **Canvas background.** Load, drop or paste an image (a frame grab, the show's background) to see it behind the PiPs. It is stretched to the canvas, and a slider dims it.
+- **Exports.**
+  - *Download PNG*: the canvas at the target resolution, one image pixel per canvas pixel, with every PiP's measurements. Load it on the switcher as a still to check the layout.
+  - *Download PDF report*: both profiles, the results table and the canvas.
+  - Both are blocked while a number is missing or invalid.
+
+  The PDF uses the standard Helvetica font, so a few characters are replaced (Δ prints as "d", → as "->", emoji as "?").
 
 ## Presets
 
@@ -40,6 +49,7 @@ Plain HTML/JS, with no build step:
 - `convert.js` holds the conversion maths and has no DOM code.
 - `app.js` is the UI.
 - `presets.js` holds the switcher presets.
+- `pdf.js` is a small PDF writer for the report (text, lines, rectangles, one JPEG), with no dependencies.
 
 Run the tests:
 

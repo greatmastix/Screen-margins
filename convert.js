@@ -16,9 +16,10 @@
       origin: 'tl',            // one of POINTS (px/pct/norm only)
       yUp: false,
       range: { left: -16, right: 16, top: 9, bottom: -9 }, // custom: value at each frame edge
-      pos: 'anchor',           // anchor | edges | insets | corners
+      pos: 'anchor',           // anchor | edges | insets | corners | rel (relative to another PiP's box)
       anchor: 'tl',            // which point of the PiP the position names
       edgeX: 'left', edgeY: 'top', // edges mode: which frame edge distances are measured from
+      relFrom: 'tl', relTo: 'tl', // rel mode: point on the reference PiP, point on this PiP
       size: 'axis',            // axis (same units as positions) | scale (1 = full frame) | scalePct (100 = full frame)
       uniform: false,          // one size value, height follows the content aspect
       aspectW: 16, aspectH: 9, // content aspect for uniform size
@@ -52,7 +53,7 @@
     return fw * (+p.W / +p.H) / content;
   }
 
-  function hasSize(p) { return p.pos === 'anchor' || p.pos === 'edges'; }
+  function hasSize(p) { return p.pos === 'anchor' || p.pos === 'edges' || p.pos === 'rel'; }
 
   /* Ordered input fields for a profile: [{key, label, hint}] */
   function fields(p) {
@@ -63,6 +64,9 @@
     } else if (p.pos === 'edges') {
       f.push({ key: 'dx', label: 'From ' + p.edgeX, hint: 'Distance from the frame ' + p.edgeX + ' edge to the PiP' },
              { key: 'dy', label: 'From ' + p.edgeY, hint: 'Distance from the frame ' + p.edgeY + ' edge to the PiP' });
+    } else if (p.pos === 'rel') {
+      const from = 'from the reference PiP’s ' + POINT_NAMES[p.relFrom] + ' to this PiP’s ' + POINT_NAMES[p.relTo];
+      f.push({ key: 'rx', label: 'ΔX', hint: 'Horizontal offset ' + from }, { key: 'ry', label: 'ΔY', hint: 'Vertical offset ' + from });
     } else if (p.pos === 'insets') {
       f.push({ key: 'il', label: 'Left', hint: 'Frame left edge to PiP left edge' }, { key: 'it', label: 'Top', hint: 'Frame top edge to PiP top edge' },
              { key: 'ir', label: 'Right', hint: 'PiP right edge to frame right edge' }, { key: 'ib', label: 'Bottom', hint: 'PiP bottom edge to frame bottom edge' });
@@ -90,8 +94,12 @@
     return f * span;
   }
 
-  /* Numbers in a profile -> box. Returns null if a needed value is missing. */
-  function toBox(p, vals) {
+  const FRAME = { l: 0, t: 0, w: 1, h: 1 };
+
+  /* Numbers in a profile -> box. Returns null if a needed value is missing.
+     ref: the reference PiP's box, needed (and only used) when p.pos is 'rel'. */
+  function toBox(p, vals, ref) {
+    if (p.pos === 'rel' && !ref) return null;
     const keys = fields(p).map(f => f.key);
     const v = {};
     for (const k of keys) {
@@ -111,6 +119,12 @@
       const [ax, ay] = POINTS[p.anchor] || POINTS.tl;
       return { l: fx(v.x) - ax * w, t: fy(v.y) - ay * h, w, h };
     }
+    if (p.pos === 'rel') {
+      // offsets run from the reference point to this PiP's point, in the profile's units and directions
+      const [fx, fy] = POINTS[p.relFrom] || POINTS.tl, [tx, ty] = POINTS[p.relTo] || POINTS.tl;
+      const px = ref.l + fx * ref.w + v.rx / (a.x1 - a.x0), py = ref.t + fy * ref.h + v.ry / (a.y1 - a.y0);
+      return { l: px - tx * w, t: py - ty * h, w, h };
+    }
     if (p.pos === 'edges') {
       const l = p.edgeX === 'right' ? 1 - w - v.dx / sx : v.dx / sx;
       const t = p.edgeY === 'bottom' ? 1 - h - v.dy / sy : v.dy / sy;
@@ -125,8 +139,8 @@
     return { l: Math.min(xa, xb), t: Math.min(ya, yb), w: Math.abs(xb - xa), h: Math.abs(yb - ya) };
   }
 
-  /* Box -> numbers in a profile (unrounded). */
-  function fromBox(p, b) {
+  /* Box -> numbers in a profile (unrounded). ref as in toBox; a missing one counts as the whole frame. */
+  function fromBox(p, b, ref) {
     const a = axes(p), { sx, sy } = spans(p);
     const cx = f => a.x0 + (a.x1 - a.x0) * f;
     const cy = f => a.y0 + (a.y1 - a.y0) * f;
@@ -134,6 +148,11 @@
     if (p.pos === 'anchor') {
       const [ax, ay] = POINTS[p.anchor] || POINTS.tl;
       out.x = cx(b.l + ax * b.w); out.y = cy(b.t + ay * b.h);
+    } else if (p.pos === 'rel') {
+      const r = ref || FRAME;
+      const [fx, fy] = POINTS[p.relFrom] || POINTS.tl, [tx, ty] = POINTS[p.relTo] || POINTS.tl;
+      out.rx = (b.l + tx * b.w - r.l - fx * r.w) * (a.x1 - a.x0);
+      out.ry = (b.t + ty * b.h - r.t - fy * r.h) * (a.y1 - a.y0);
     } else if (p.pos === 'edges') {
       out.dx = (p.edgeX === 'right' ? 1 - b.l - b.w : b.l) * sx;
       out.dy = (p.edgeY === 'bottom' ? 1 - b.t - b.h : b.t) * sy;
@@ -166,12 +185,46 @@
     return w;
   }
 
-  function parseNum(s) {
+  /* A plain number, as typed or pasted: spaces, a decimal comma and a trailing unit (px, %) are fine. */
+  function parsePlain(s) {
     if (s === null || s === undefined) return null;
     if (typeof s === 'number') return isFinite(s) ? s : null;
     const t = String(s).trim().replace(/\s/g, '').replace(/[%a-z]+$/i, '').replace(',', '.');
     if (t === '' || !/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)) return null;
     return parseFloat(t);
+  }
+
+  /* Arithmetic: + - * / (also × x ÷), brackets, unary minus, decimal comma. No eval(). */
+  function evalExpr(str, info) {
+    const s = String(str).replace(/\s/g, '').replace(/(px|%)$/i, '').replace(/,/g, '.').replace(/[×xX]/g, '*').replace(/÷/g, '/');
+    let i = 0;
+    const num = () => {
+      const m = /^(\d+\.?\d*|\.\d+)(e[-+]?\d+)?/i.exec(s.slice(i));
+      if (!m) throw new Error('number expected');
+      i += m[0].length; return parseFloat(m[0]);
+    };
+    const factor = () => {
+      if (s[i] === '+') { i++; return factor(); }
+      if (s[i] === '-') { i++; return -factor(); }
+      if (s[i] === '(') { i++; const v = expr(); if (s[i] !== ')') throw new Error(') expected'); i++; return v; }
+      return num();
+    };
+    const term = () => { let v = factor(); while (s[i] === '*' || s[i] === '/') { const o = s[i++], w = factor(); if (o === '/' && w === 0 && info) info.div0 = true; v = o === '*' ? v * w : v / w; } return v; };
+    const expr = () => { let v = term(); while (s[i] === '+' || s[i] === '-') { const o = s[i++], w = term(); v = o === '+' ? v + w : v - w; } return v; };
+    try {
+      const v = expr();
+      if (info) info.div0 = !!info.div0 && i === s.length;   // only for an otherwise complete sum
+      return i === s.length && isFinite(v) ? v : null;
+    } catch (e) { if (info) info.div0 = false; return null; }
+  }
+  /* A complete sum that divides by zero (the app has an opinion about those). */
+  function divByZero(s) { const info = {}; evalExpr(s, info); return info.div0; }
+
+  /* A number or a sum like 200+10 or (1920-640)/2. */
+  function parseNum(s) {
+    const n = parsePlain(s);
+    if (n !== null || typeof s !== 'string' || !s.trim()) return n;
+    return evalExpr(s);
   }
 
   function fmt(n, decimals) {
@@ -203,7 +256,7 @@
     return boxes;
   }
 
-  const api = { POINTS, POINT_NAMES, defaultProfile, axes, spans, fields, toBox, fromBox, warnings, parseNum, fmt, layout, hasSize, sizeFrac, sizeVal, boxAspect };
+  const api = { POINTS, POINT_NAMES, defaultProfile, axes, spans, fields, toBox, fromBox, warnings, parseNum, parsePlain, evalExpr, divByZero, fmt, layout, hasSize, sizeFrac, sizeVal, boxAspect };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.SM = api;
 })(this);

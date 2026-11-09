@@ -43,6 +43,8 @@ header.top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; pad
 .btn.primary { background: var(--accent-soft); border-color: rgba(239, 75, 85, .45); color: var(--accent-strong); }
 .btn.primary:hover { background: rgba(239, 75, 85, .22); }
 .btn.sm { padding: 5px 10px; font-size: 12.5px; }
+.btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
+.btn[aria-disabled="true"]:hover { background: var(--surface-2); border-color: var(--border); }
 
 h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-secondary); font-weight: 600; margin: 26px 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 h2 .count { color: var(--text-muted); font-weight: 500; letter-spacing: 0; text-transform: none; }
@@ -65,8 +67,7 @@ h2 .right { margin-left: auto; display: flex; gap: 8px; text-transform: none; le
 .unit { position: relative; }
 .unit span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
 .unit input { padding-right: 34px; }
-input[type=number], input[type=text], select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text-primary); font: inherit; font-variant-numeric: tabular-nums; min-width: 0; }
-input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input[type=text], select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text-primary); font: inherit; font-variant-numeric: tabular-nums; min-width: 0; }
 input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 input:focus, select:focus, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 input.bad { border-color: var(--critical); }
@@ -83,6 +84,11 @@ input.bad { border-color: var(--critical); }
 
 /* preview */
 .preview { padding: 14px; }
+.bgctl { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
+.bgctl label { display: inline-flex; align-items: center; gap: 6px; }
+.bgctl input[type=range] { width: 90px; accent-color: var(--accent); }
+.bgctl[hidden] { display: none; }
+.preview.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
 #pv { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
 .preview .bar { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
 .preview .bar b { color: var(--text-secondary); font-weight: 600; }
@@ -100,6 +106,7 @@ svg .origintxt { fill: var(--accent-strong); font-family: var(--sans); font-weig
 svg .given { stroke: var(--text-primary); stroke-width: 2; fill: none; pointer-events: none; }
 svg .giventxt { fill: var(--text-primary); font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; paint-order: stroke; stroke: #101012; stroke-width: 4px; }
 svg .srcpt { fill: var(--text-primary); stroke: #101012; stroke-width: 1.5; pointer-events: none; }
+svg .srcpt.from { fill: none; stroke: var(--text-primary); stroke-width: 2; }
 svg .modetxt { fill: var(--text-secondary); font-family: var(--sans); pointer-events: none; }
 svg .ghost { fill: none; stroke: var(--warning); stroke-dasharray: 8 6; stroke-width: 2; pointer-events: none; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 10px; }
@@ -121,6 +128,11 @@ tr.sel td { background: var(--surface-2); }
 td input[type=text] { padding: 6px 8px; min-width: 70px; }
 td input.name { min-width: 110px; }
 td select.mode { padding: 6px 8px; min-width: 150px; width: auto; }
+td .relpts { display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+td .relpts span { color: var(--text-muted); font-size: 12px; }
+td select.pt { padding: 4px 6px; font-size: 12px; width: auto; min-width: 0; flex: 1; }
+td .chk.same { margin: 5px 0 0 2px; font-size: 12px; white-space: nowrap; }
+td input[readonly] { color: var(--text-muted); border-style: dashed; }
 td .cell { display: block; }
 td .pair { display: flex; gap: 6px; align-items: center; }
 td .cell > span { white-space: nowrap; overflow: visible; }
@@ -188,6 +200,7 @@ details.gen[open] summary { margin-bottom: 12px; }
   <h2>PiPs <span class="count" id="pipcount"></span>
     <span class="right">
       <button class="btn sm" id="copyall" type="button" title="Copy names and target values as a tab-separated table (pastes into Excel/Numbers)">Copy results</button>
+      <button class="btn sm" id="pdf" type="button" title="Download a PDF with both profiles, the results table and the canvas">Download PDF report</button>
       <button class="btn sm" id="clearall" type="button">Clear all</button>
       <button class="btn sm primary" id="add" type="button">+ Add PiP</button>
     </span>
@@ -196,17 +209,23 @@ details.gen[open] summary { margin-bottom: 12px; }
     <div id="banner"></div>
     <div class="tbl-wrap"><table id="tbl"></table></div>
   </div>
-  <p class="hint" style="margin-top:8px">Paste straight from a spreadsheet or PDF table into any source cell: tabs/columns and lines fill neighbouring cells and add rows as needed. Click a target value to copy it.</p>
+  <p class="hint" style="margin-top:8px">Paste straight from a spreadsheet or PDF table into any source cell: tabs/columns and lines fill neighbouring cells and add rows as needed. Number fields take sums like <code>200+10</code> or <code>(1920-640)/2</code>. Click a target value to copy it.</p>
 
   <div class="layout">
     <section>
-      <h2>Preview <span class="count">drag to move, corner handle to resize</span></h2>
+      <h2>Preview <span class="count">drag to move, corner handle to resize</span>
+        <span class="right">
+          <span id="bgctl" class="bgctl" hidden><label title="Darken the background so the lines stay readable">Dim <input type="range" id="bgdim" min="0" max="90" step="5" value="40"></label><button class="btn sm" id="bgdel" type="button" title="Remove the background" aria-label="Remove the background">×</button></span>
+          <button class="btn sm" id="bgbtn" type="button" title="Show an image behind the PiPs, stretched to the canvas. You can also drop or paste one onto the preview.">Background…</button><input type="file" id="bgfile" accept="image/*" hidden>
+          <button class="btn sm" id="png" type="button" title="The whole canvas as an image at the target resolution (one image pixel per canvas pixel) with every PiP's measurements: load it on the switcher as a still to check the layout">Download PNG</button></span>
+      </h2>
       <div class="card preview">
         <div class="bar" id="pvbar"></div>
         <svg id="pv"></svg>
         <div class="legend">
           <span><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2L12 7L7 12L2 7Z" fill="#f3f3f4"/></svg> point the source numbers refer to</span>
           <span><svg width="22" height="12" viewBox="0 0 22 12"><path d="M1 6h20M1 2v8M21 2v8" stroke="#f3f3f4" stroke-width="2"/></svg> what each source number measures (selected PiP)</span>
+          <span><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2L12 7L7 12L2 7Z" fill="none" stroke="#f3f3f4" stroke-width="1.6"/></svg> point on the reference PiP (relative rows)</span>
           <span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4.5" fill="none" stroke="#f3f3f4" stroke-width="2"/></svg> point the target position refers to</span>
           <span><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 7h12M7 1v12" stroke="#ff5f68" stroke-width="2"/></svg> target 0,0</span>
           <span><svg width="22" height="12" viewBox="0 0 22 12"><path d="M1 6h20M1 2v8M21 2v8" stroke="#b3b3ba" stroke-width="1.5" stroke-dasharray="4 3"/></svg> what each target number measures (selected PiP)</span>
@@ -219,19 +238,19 @@ details.gen[open] summary { margin-bottom: 12px; }
         <details class="gen" id="gen">
           <summary>Equal PiPs with margins and gaps</summary>
           <div class="row">
-            <div class="field"><label for="g-count">Number of PiPs</label><input type="number" id="g-count" value="4" min="1" max="64"></div>
-            <div class="field"><label for="g-cols">Columns</label><input type="number" id="g-cols" placeholder="auto" min="1" max="64"></div>
+            <div class="field"><label for="g-count">Number of PiPs</label><input type="text" inputmode="decimal" id="g-count" value="4" min="1" max="64"></div>
+            <div class="field"><label for="g-cols">Columns</label><input type="text" inputmode="decimal" id="g-cols" placeholder="auto" min="1" max="64"></div>
           </div>
           <div class="row">
-            <div class="field"><label for="g-mx">Outer margin left/right</label><div class="unit"><input type="number" id="g-mx" value="40" step="any"><span>px</span></div></div>
-            <div class="field"><label for="g-my">Outer margin top/bottom</label><div class="unit"><input type="number" id="g-my" value="40" step="any"><span>px</span></div></div>
+            <div class="field"><label for="g-mx">Outer margin left/right</label><div class="unit"><input type="text" inputmode="decimal" id="g-mx" value="40" step="any"><span>px</span></div></div>
+            <div class="field"><label for="g-my">Outer margin top/bottom</label><div class="unit"><input type="text" inputmode="decimal" id="g-my" value="40" step="any"><span>px</span></div></div>
           </div>
           <div class="row">
-            <div class="field"><label for="g-gx">Gap between columns</label><div class="unit"><input type="number" id="g-gx" value="20" step="any"><span>px</span></div></div>
-            <div class="field"><label for="g-gy">Gap between rows</label><div class="unit"><input type="number" id="g-gy" value="20" step="any"><span>px</span></div></div>
+            <div class="field"><label for="g-gx">Gap between columns</label><div class="unit"><input type="text" inputmode="decimal" id="g-gx" value="20" step="any"><span>px</span></div></div>
+            <div class="field"><label for="g-gy">Gap between rows</label><div class="unit"><input type="text" inputmode="decimal" id="g-gy" value="20" step="any"><span>px</span></div></div>
           </div>
           <div class="row">
-            <div class="field"><label>PiP aspect</label><div class="ratio"><input type="number" id="g-aw" value="16" min="0" step="any" aria-label="Aspect width"><span>:</span><input type="number" id="g-ah" value="9" min="0" step="any" aria-label="Aspect height"></div></div>
+            <div class="field"><label>PiP aspect</label><div class="ratio"><input type="text" inputmode="decimal" id="g-aw" value="16" min="0" step="any" aria-label="Aspect width"><span>:</span><input type="text" inputmode="decimal" id="g-ah" value="9" min="0" step="any" aria-label="Aspect height"></div></div>
             <div class="field"><span class="lbl">&nbsp;</span><label class="chk"><input type="checkbox" id="g-stretch"> Fill cells, ignore aspect</label></div>
           </div>
           <p class="hint" id="g-hint">Pixels of the source canvas. PiPs are as large as fits, centred; a short last row is centred too. The dashed outlines in the preview show the result.</p>
@@ -257,6 +276,7 @@ details.gen[open] summary { margin-bottom: 12px; }
 </div>
 <div class="toast" id="toast"></div>
 <script src="convert.js"></script>
+<script src="pdf.js"></script>
 <script src="presets.js"></script>
 <script src="app.js"></script>
 </body>

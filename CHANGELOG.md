@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.1.0 (2026-11-09)
+
+- **Relative PiPs:** position a PiP from another one.
+  - Choose "Relative to …" in the row's position menu, then a point on the reference and a point on this PiP, plus the offset ΔX / ΔY between them.
+  - "Same size as …" keeps its W/H equal to the reference.
+  - Moving or resizing the reference moves its dependants.
+  - Deleting a reference turns its dependants into absolute positions where they are.
+  - Adding a PiP after a relative row continues the chain.
+- **Sums in number fields:** every number field accepts arithmetic (`+ - * /`, brackets, decimal comma), e.g. `200+10` or `(1920-640)/2`. Enter or leaving the field shows the result.
+- **Download PNG:** the canvas at the target resolution with every PiP's measurements, to load on the switcher as a still.
+- **Download PDF report:** both profiles, the results table and the canvas, as A4 landscape.
+- **Exports are blocked while numbers are invalid.** The buttons say why, and a click jumps to the field that needs fixing.
+- **Canvas background:** show an image behind the PiPs (button, drag and drop, or paste), stretched to the canvas, with a dim slider. It's remembered in the browser and included in both exports.
+- Small relative offsets share one label in the preview instead of overlapping.
+- Try dividing by zero and pressing Enter.
+
 ## v1.0.0 (2026-11-09)
 
 First release.

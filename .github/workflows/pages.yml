@@ -18,7 +18,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - run: mkdir site && cp index.html app.js convert.js presets.js site/
+      - run: mkdir site && cp index.html app.js convert.js presets.js pdf.js site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
