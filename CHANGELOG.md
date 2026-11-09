@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.2.1 (2026-11-09)
+
+- Privacy note in the footer: what stays in the browser, what share links contain, and what the host sees.
+
 ## v1.2.0 (2026-11-09)
 
 - **Blackmagic ATEM presets:** upstream key DVE / Picture in Picture (Position X / Y on the ±16 / ±9 grid, Size X / Size Y) and SuperSource box (same grid assumed, one Size value).

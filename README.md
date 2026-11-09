@@ -30,6 +30,10 @@ Everything runs in the browser. There is no server, and profiles and PiPs are sa
 
   The PDF uses the standard Helvetica font, so a few characters are replaced (Δ prints as "d", → as "->", emoji as "?").
 
+## Privacy
+
+No cookies, no tracking, and nothing is loaded from other servers. What you enter stays in your browser's local storage, and share links keep their data after the `#`, which browsers never send to a server. GitHub Pages sees your IP address to deliver the page (see the [GitHub Privacy Statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
+
 ## Presets
 
 Presets set the conventions and the device's field names. They keep your canvas size. Each preset shows a note in the app saying what it's based on.
