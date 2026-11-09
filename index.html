@@ -96,7 +96,10 @@ svg .frame { fill: #101012; stroke: #3a3a40; }
 svg .guide { stroke: var(--grid); }
 svg .pip { fill-opacity: .2; stroke-width: 2; cursor: move; }
 svg .pip.sel { fill-opacity: .32; stroke-width: 3; }
-svg .handle { fill: var(--text-primary); cursor: nwse-resize; }
+svg .handle { fill: var(--text-primary); stroke: #101012; stroke-width: 1; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
+svg .handle.h-tr, svg .handle.h-bl { cursor: nesw-resize; }
+svg .handle.h-tc, svg .handle.h-bc { cursor: ns-resize; }
+svg .handle.h-ml, svg .handle.h-mr { cursor: ew-resize; }
 svg .lbl { fill: var(--text-primary); font-family: var(--sans); font-weight: 600; pointer-events: none; }
 svg .dim { stroke: var(--text-secondary); stroke-dasharray: 5 4; stroke-width: 1.5; fill: none; pointer-events: none; }
 svg .dimtxt { fill: var(--text-secondary); font-family: var(--sans); font-variant-numeric: tabular-nums; pointer-events: none; paint-order: stroke; stroke: #101012; stroke-width: 4px; }
@@ -108,6 +111,24 @@ svg .giventxt { fill: var(--text-primary); font-family: var(--sans); font-weight
 svg .srcpt { fill: var(--text-primary); stroke: #101012; stroke-width: 1.5; pointer-events: none; }
 svg .srcpt.from { fill: none; stroke: var(--text-primary); stroke-width: 2; }
 svg .modetxt { fill: var(--text-secondary); font-family: var(--sans); pointer-events: none; }
+svg .snap { stroke: var(--accent-strong); stroke-width: 1.5; fill: none; pointer-events: none; }
+svg .snap.gap { stroke-width: 2.5; }
+.snapmenu { position: relative; display: inline-block; }
+.snapmenu > summary { list-style: none; cursor: pointer; }
+.snapmenu > summary::-webkit-details-marker { display: none; }
+.snapmenu[open] > summary { border-color: var(--accent); }
+.snapmenu .pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; display: grid; gap: 9px; min-width: 260px; padding: 12px 14px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  font-size: 13px; font-weight: 400; color: var(--text-primary); text-align: left; text-transform: none; letter-spacing: 0; }
+.snapmenu .pop label { display: flex; gap: 8px; align-items: baseline; cursor: pointer; }
+.snapmenu .pop label span { display: block; color: var(--text-muted); font-size: 12px; }
+.snapmenu .pop input { accent-color: var(--accent); }
+.snapmenu .pop p { margin: 2px 0 0; color: var(--text-muted); font-size: 12px; }
+#pv:focus { outline: none; }
+#pv:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn.icon { padding: 7px 9px; line-height: 0; }
+.btn:disabled { opacity: .4; cursor: default; }
+.topbtns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 svg .ghost { fill: none; stroke: var(--warning); stroke-dasharray: 8 6; stroke-width: 2; pointer-events: none; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -183,7 +204,12 @@ details.gen[open] summary { margin-bottom: 12px; }
         <div class="hw">Convert PiP positions and sizes between how they're documented and how the switcher wants them</div>
       </div>
     </div>
-    <button class="btn" id="swap" type="button" title="Swap source and target profiles; your PiPs keep their place on screen">Swap source ⇄ target</button>
+    <div class="topbtns">
+      <button class="btn icon" id="undo" type="button" title="Undo (Ctrl+Z / ⌘Z)" aria-label="Undo" disabled><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 3.5L2.5 6.5L5.5 9.5"/><path d="M2.5 6.5H10a3.5 3.5 0 0 1 0 7H7"/></svg></button>
+      <button class="btn icon" id="redo" type="button" title="Redo (Ctrl+Shift+Z / Ctrl+Y / ⇧⌘Z)" aria-label="Redo" disabled><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 3.5L13.5 6.5L10.5 9.5"/><path d="M13.5 6.5H6a3.5 3.5 0 0 0 0 7H9"/></svg></button>
+      <button class="btn" id="share" type="button" title="Copy a link that opens these profiles and PiPs (saved profiles and the background stay here)">Copy share link</button>
+      <button class="btn" id="swap" type="button" title="Swap source and target profiles; your PiPs keep their place on screen">Swap source ⇄ target</button>
+    </div>
   </header>
 
   <div class="cols2">
@@ -213,9 +239,16 @@ details.gen[open] summary { margin-bottom: 12px; }
 
   <div class="layout">
     <section>
-      <h2>Preview <span class="count">drag to move, corner handle to resize</span>
+      <h2>Preview <span class="count" title="Drag a PiP to move it, or a corner or edge handle to resize it; with the aspect lock on, it keeps its shape. Dragging snaps to the frame, other PiPs and equal gaps (pick which under Snap); hold Alt to place freely. After clicking a PiP: arrow keys move it by 1 px, Shift+arrows by 10 px, Alt+arrows resize.">drag to move, handles to resize (snaps; Alt = free), arrow keys nudge</span>
         <span class="right">
           <span id="bgctl" class="bgctl" hidden><label title="Darken the background so the lines stay readable">Dim <input type="range" id="bgdim" min="0" max="90" step="5" value="40"></label><button class="btn sm" id="bgdel" type="button" title="Remove the background" aria-label="Remove the background">×</button></span>
+          <details class="snapmenu" id="snapmenu"><summary class="btn sm" id="snapsum" title="What dragging snaps to">Snap</summary>
+            <div class="pop">
+              <label><input type="checkbox" data-snap="frame"> Frame edges and centre lines</label>
+              <label><input type="checkbox" data-snap="pips"> Edges and centres of other PiPs</label>
+              <label><input type="checkbox" data-snap="equal"><div>Equal gaps<span>between neighbours, the frame edges and the centre lines</span></div></label>
+              <p>Hold Alt while dragging to place freely.</p>
+            </div></details>
           <button class="btn sm" id="bgbtn" type="button" title="Show an image behind the PiPs, stretched to the canvas. You can also drop or paste one onto the preview.">Background…</button><input type="file" id="bgfile" accept="image/*" hidden>
           <button class="btn sm" id="png" type="button" title="The whole canvas as an image at the target resolution (one image pixel per canvas pixel) with every PiP's measurements: load it on the switcher as a still to check the layout">Download PNG</button></span>
       </h2>

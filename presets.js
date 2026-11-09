@@ -2,6 +2,18 @@
  * Keep `note` honest about what is documented and what is assumed. */
 window.SM_PRESETS = [
   {
+    id: 'atem-dve', label: 'Blackmagic ATEM · Upstream key DVE / Picture in Picture',
+    note: 'Position X / Y place the DVE’s centre: 0,0 = frame centre, ±16 = left / right edge, ±9 = top / bottom edge, Y counts up (top-left quarter = −8, 4.5). The same numbers at every resolution. Size X / Size Y: 1 = full frame. Based on ATEM SDK examples for 16:9; check one value on the switcher.',
+    p: { unit: 'custom', range: { left: -16, right: 16, top: 9, bottom: -9 }, origin: 'c', yUp: true, pos: 'anchor', anchor: 'c', size: 'scale', uniform: false, decimals: 2,
+      labels: { x: 'Position X', y: 'Position Y', w: 'Size X', h: 'Size Y' } },
+  },
+  {
+    id: 'atem-ss', label: 'Blackmagic ATEM · SuperSource box',
+    note: 'Assumed to use the same ±16 / ±9 grid as the DVE (box centre, Y up); Size is one value, 1 = full frame, keeping 16:9. Not yet checked on a switcher.',
+    p: { unit: 'custom', range: { left: -16, right: 16, top: 9, bottom: -9 }, origin: 'c', yUp: true, pos: 'anchor', anchor: 'c', size: 'scale', uniform: true,
+      aspectW: 16, aspectH: 9, decimals: 2, labels: { x: 'X Position', y: 'Y Position', s: 'Size', w: 'Size X', h: 'Size Y' } },
+  },
+  {
     id: 'barco-em', label: 'Barco Event Master · E2 / E3 / S3 / PDS-4K',
     note: 'H Pos / V Pos: pixels from the destination’s top-left corner to the layer’s top-left corner; H Size / V Size in pixels. This is the default origin (the PDS-4K manual’s API example shows a full-screen layer as 0, 0, 1920, 1080).',
     p: { unit: 'px', origin: 'tl', yUp: false, pos: 'anchor', anchor: 'tl', size: 'axis', uniform: false, decimals: 0,

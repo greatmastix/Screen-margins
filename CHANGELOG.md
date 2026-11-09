@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.0 (2026-11-09)
+
+- **Blackmagic ATEM presets:** upstream key DVE / Picture in Picture (Position X / Y on the ±16 / ±9 grid, Size X / Size Y) and SuperSource box (same grid assumed, one Size value).
+- **Share links:** "Copy share link" puts both profiles and every PiP into the link. Opening it replaces the layout; Undo brings yours back.
+- **Undo and redo** for every change, with Ctrl+Z / ⌘Z and buttons.
+- **Resize from every corner and edge** in the preview. The PiP's aspect lock decides whether it keeps its shape.
+- **Snapping:** dragging snaps to the frame edges and centre, to other PiPs and to equal gaps: centred between its neighbours (PiPs, frame edges or the centre lines), or the same gap as the neighbouring pair. Resizing snaps an edge to the same gap as the opposite side. The Snap menu turns each kind on or off; hold Alt to place freely.
+- **Arrow keys** move the selected PiP by 1 px, Shift+arrows by 10 px, Alt+arrows resize it.
+- Browser tests in Chromium, Firefox and WebKit run in CI.
+
 ## v1.1.0 (2026-11-09)
 
 - **Relative PiPs:** position a PiP from another one.

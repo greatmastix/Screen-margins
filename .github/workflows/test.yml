@@ -9,3 +9,18 @@ jobs:
         with:
           node-version: 22
       - run: node test/convert.test.js
+  browser:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --user 1001 --ipc=host
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm i --no-save --no-package-lock playwright@1.63.0
+      - run: node test/e2e.test.mjs
+        env:
+          BROWSER: ${{ matrix.browser }}

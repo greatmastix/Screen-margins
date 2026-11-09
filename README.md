@@ -18,7 +18,9 @@ Everything runs in the browser. There is no server, and profiles and PiPs are sa
 - **PiP table.** Add as many PiPs as you need. Each row can use its own position format, and each has an aspect lock between W and H: type whichever one is given, and the other follows. You can paste straight from a spreadsheet or a PDF. Click a result to copy it, or use "Copy results" for the whole table (tab-separated).
 - **Relative PiPs.** A row can be positioned from another PiP: pick a point on the reference (e.g. its bottom-right), a point on this PiP (e.g. its top-left) and the offset ΔX / ΔY between them. Optionally it keeps the reference's size. Moving the reference moves everything that hangs off it. The target values are always absolute positions.
 - **Sums in number fields.** Type `200+10` or `(1920-640)/2`; Enter or leaving the field replaces the sum with the result.
-- **Preview.** Drag PiPs to move them, and use the corner handle to resize. For the selected PiP, solid lines show what each source number measures and dashed lines show what each target number measures, each labelled with its value.
+- **Preview.** Drag PiPs to move them, and drag any corner or edge handle to resize. With the aspect lock on, the PiP keeps its shape. Dragging snaps to the frame edges and centre, to other PiPs, and to equal gaps (centred between neighbours, or the same gap as next door); the Snap menu picks which, and Alt places freely. After clicking a PiP, the arrow keys move it by 1 px (Shift: 10 px, Alt: resize). For the selected PiP, solid lines show what each source number measures and dashed lines show what each target number measures, each labelled with its value.
+- **Undo and redo** for every change: Ctrl+Z / ⌘Z, Ctrl+Shift+Z / Ctrl+Y / ⇧⌘Z, or the arrow buttons at the top.
+- **Share links.** "Copy share link" puts both profiles and all PiPs into the link itself (after the `#`, so it never reaches a server). Opening it replaces the layout; Undo brings yours back. Saved profiles and the background image aren't included.
 - **Layout generator.** Lays out N equal PiPs in a grid with outer margins, gaps and an aspect ratio.
 - **Canvas background.** Load, drop or paste an image (a frame grab, the show's background) to see it behind the PiPs. It is stretched to the canvas, and a slider dims it.
 - **Exports.**
@@ -34,13 +36,15 @@ Presets set the conventions and the device's field names. They keep your canvas 
 
 | Preset | Position | Size |
 |---|---|---|
+| Blackmagic ATEM · Upstream key DVE / Picture in Picture | Position X / Y = DVE centre, 0,0 = frame centre, ±16 / ±9 = frame edges, Y counts up | Size X / Size Y, 1 = full frame |
+| Blackmagic ATEM · SuperSource box | *assumed the same grid as the DVE* | Size, 1 = full frame (16:9) |
 | Barco Event Master · E2 / E3 / S3 / PDS-4K | H Pos / V Pos: pixels from the destination's top-left to the layer's top-left | H Size / V Size, px |
 | Barco Event Master · "Layer Position Center of Destination" | 0,0 = destination centre, layer centre, px. *V direction not stated in Barco's docs; assumed down.* | px |
 | Analog Way LivePremier (Aquilon) · Alta 4K (Zenith) · Web RCS | layer centre, px from the screen's top-left | px |
 | OBS Studio · Positional Alignment top-left / centre | Position at the alignment point, canvas px | Size, px |
 | vMix · Position tab | Pan X / Pan Y = layer centre, 0 = centred, ±1 = frame edge; *Pan Y counts up (forum-sourced)* | Zoom, 1 = full frame |
 
-The two points in italics haven't been confirmed on hardware. If you can check one, please open an issue.
+The points in italics haven't been confirmed on hardware. If you can check one, please open an issue.
 
 ## Development
 
@@ -56,6 +60,15 @@ Run the tests:
 ```bash
 node test/convert.test.js
 ```
+
+The browser tests (`test/e2e.test.mjs`) serve the page and drive it with [Playwright](https://playwright.dev) in Chromium, Firefox or WebKit:
+
+```bash
+npm i --no-save playwright && npx playwright install chromium
+BROWSER=chromium node test/e2e.test.mjs
+```
+
+CI runs both, the browser tests in all three engines.
 
 ## Changes
 

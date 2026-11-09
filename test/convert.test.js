@@ -1,4 +1,4 @@
-// Run: node test/convert.test.js
+// Run: docker run --rm -v "$PWD":/w -w /w node:22-alpine node test/convert.test.js
 const assert = require('assert');
 const SM = require('../convert.js');
 const P = SM.defaultProfile;
@@ -119,5 +119,15 @@ t('pdf writer: valid structure', () => {
   const offs = txt.slice(xref).split('\n').slice(3).filter(l => / n $/.test(l)).map(l => parseInt(l, 10));
   offs.forEach((o, i) => assert.ok(txt.startsWith(`${i + 1} 0 obj`, o), `object ${i + 1} offset`));
   assert.ok(txt.includes('(Hi \\(there\\) \\\\ d) Tj') && txt.includes('/Count 2'));
+});
+t('ATEM presets: top-left quarter is -8, 4.5 at size 0.5', () => {
+  global.window = global.window || {}; require('../presets.js');
+  const pre = id => P(window.SM_PRESETS.find(x => x.id === id).p);
+  const q = { x: 0, y: 0, w: 960, h: 540 };
+  const r = convert(P(), q, pre('atem-dve'));
+  near(r.x, -8, 'x'); near(r.y, 4.5, 'y'); near(r.w, 0.5, 'w'); near(r.h, 0.5, 'h');
+  const s = convert(P(), q, pre('atem-ss'));
+  near(s.x, -8, 'ss x'); near(s.y, 4.5, 'ss y'); near(s.s, 0.5, 'ss size');
+  near(convert(P(), { x: 960, y: 540, w: 960, h: 540 }, pre('atem-dve')).y, -4.5, 'bottom-right y');
 });
 console.log(`ok, ${n} tests`);

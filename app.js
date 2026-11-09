@@ -92,21 +92,28 @@
   const srcFor = p => withMode(S.src, p);
 
   /* ---------- state ---------- */
-  let S = load() || initial();
-  S.nextId = Math.max(S.nextId || 1, ...S.pips.map(p => (p.id || 0) + 1));
-  S.pips.forEach(p => { p.mode = p.mode || ''; if (!p.id) p.id = S.nextId++; });
-  S.pips.forEach(p => {
-    if (relOf(p)) return;
-    // older saves may hold a single size value: read them with the profile as saved, then rewrite as W/H
-    const asSaved = Object.assign({}, S.src, modeOv(p.mode));
-    p.box = SM.toBox(asSaved, p.vals);
-    reformat(p, asSaved, srcFor(p));
-  });
-  resolveAll();
-  S.pips.forEach(p => {
-    if (p.lock === undefined) p.lock = true;
-    if (!(p.aspect > 0)) p.aspect = validBox(p.box) ? SM.boxAspect(S.src, p.box) : DEF_ASPECT;
-  });
+  let S;
+  /* Take a loaded, shared or undone state: fill in defaults and recompute every box. */
+  function adopt(s) {
+    s.src = SM.defaultProfile(s.src); s.dst = SM.defaultProfile(s.dst); s.saved = s.saved || {};
+    s.pips.forEach(p => { p.vals = p.vals || {}; });
+    S = s;
+    S.nextId = Math.max(S.nextId || 1, ...S.pips.map(p => (p.id || 0) + 1));
+    S.pips.forEach(p => { p.mode = p.mode || ''; if (!p.id) p.id = S.nextId++; });
+    S.pips.forEach(p => {
+      if (relOf(p)) return;
+      // older saves may hold a single size value: read them with the profile as saved, then rewrite as W/H
+      const asSaved = Object.assign({}, S.src, modeOv(p.mode));
+      p.box = SM.toBox(asSaved, p.vals);
+      reformat(p, asSaved, srcFor(p));
+    });
+    resolveAll();
+    S.pips.forEach(p => {
+      if (p.lock === undefined) p.lock = true;
+      if (!(p.aspect > 0)) p.aspect = validBox(p.box) ? SM.boxAspect(S.src, p.box) : DEF_ASPECT;
+    });
+  }
+  adopt(load() || initial());
   let sel = 0;
 
   function initial() {
@@ -118,17 +125,46 @@
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
-      if (s && s.src && s.dst && Array.isArray(s.pips)) {
-        s.src = SM.defaultProfile(s.src); s.dst = SM.defaultProfile(s.dst); s.saved = s.saved || {};
-        s.pips.forEach(p => { p.vals = p.vals || {}; });
-        return s;
-      }
+      if (s && s.src && s.dst && Array.isArray(s.pips)) return s;
     } catch (e) { /* storage unavailable or corrupt: start fresh */ }
     return null;
   }
   let saveT;
-  function saveNow() { clearTimeout(saveT); saveT = null; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* private mode */ } }
+  function persist(str) { try { localStorage.setItem(KEY, str); } catch (e) { /* private mode */ } }
+  function saveNow() { clearTimeout(saveT); saveT = null; const str = JSON.stringify(S); record(str); persist(str); }
   function save() { clearTimeout(saveT); saveT = setTimeout(saveNow, 200); }
+  /* ---------- undo / redo ----------
+     Every save is a step (saves are debounced, so a burst of typing or one drag is one step). The background image isn't part of it. */
+  const hist = { list: [JSON.stringify(S)], at: 0 };
+  function record(str) {
+    if (hist.list[hist.at] === str) return;
+    hist.list.length = hist.at + 1; hist.list.push(str);
+    if (hist.list.length > 200) hist.list.shift();
+    hist.at = hist.list.length - 1;
+    undoState();
+  }
+  function undoState() {
+    const u = $('#undo'), r = $('#redo'); if (!u) return;
+    u.disabled = hist.at <= 0; r.disabled = hist.at >= hist.list.length - 1;
+  }
+  /* Replace the whole state and redraw, keeping the focus on the same field if it still exists. */
+  function replaceState(next, from) {
+    const a = document.activeElement, tr = a && a.closest && a.closest('tr[data-i]'), prof = a && a.closest && a.closest('#prof-src, #prof-dst');
+    const again = tr && a.dataset.c ? `#tbl tr[data-i="${tr.dataset.i}"] [data-c="${a.dataset.c}"]` : prof && a.dataset.k ? `#${prof.id} [data-k="${a.dataset.k}"]` : null;
+    adopt(next);
+    if (sel >= S.pips.length) sel = Math.max(0, S.pips.length - 1);
+    renderProfile('src'); renderProfile('dst'); renderTable(); renderPreview();
+    if (again) { const el = $(again); if (el) el.focus(); } else if (from) from.focus();
+  }
+  function step(dir) {
+    if (saveT) saveNow();
+    const j = hist.at + dir; if (j < 0 || j >= hist.list.length) return false;
+    hist.at = j;
+    replaceState(JSON.parse(hist.list[j]));
+    const str = JSON.stringify(S); hist.list[j] = str; persist(str);
+    undoState();
+    return true;
+  }
   // don't lose the last edit when the tab is closed or reloaded within the debounce
   addEventListener('pagehide', () => { if (saveT) saveNow(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) saveNow(); });
@@ -567,6 +603,11 @@
       const b = S.pips[i].box; if (!b || !(b.w > 0) || !(b.h > 0)) continue;
       const x = b.l * W, y = b.t * H, w = b.w * W, h = b.h * H, c = color(i);
       o.push(`<rect class="pip${i === sel && !all ? ' sel' : ''}" data-i="${i}" x="${r(x)}" y="${r(y)}" width="${r(w)}" height="${r(h)}" fill="${c}" stroke="${c}" ${ve}/>`);
+      const hs = fs * .7;
+      if (i === sel && !all && !(S.pips[i].same && relOf(S.pips[i]))) for (const [k, [hx, hy]] of Object.entries(SM.POINTS)) {
+        if (k === 'c' || (hx === .5 && w < hs * 4) || (hy === .5 && h < hs * 4)) continue;
+        o.push(`<rect class="handle h-${k}" data-i="${i}" data-h="${k}" x="${r(x + hx * w - hs / 2)}" y="${r(y + hy * h - hs / 2)}" width="${r(hs)}" height="${r(hs)}" rx="${r(hs / 5)}"/>`);
+      }
       const sp = srcFor(S.pips[i]);
       o.push(`<text class="lbl" x="${r(x + fs * .4)}" y="${r(y + fs * 1.2)}" font-size="${r(fs)}">${esc(S.pips[i].name || i + 1)}</text>`);
       if (h > fs * 3.2) o.push(`<text class="modetxt" x="${r(x + fs * .4)}" y="${r(y + fs * 2.15)}" font-size="${r(fs * .72)}">given as ${esc(describe(sp))}</text>`);
@@ -585,8 +626,6 @@
           o.push(`<path class="srcpt from" d="M${r(px)} ${r(py - k)}L${r(px + k)} ${r(py)}L${r(px)} ${r(py + k)}L${r(px - k)} ${r(py)}Z" ${ve}/>`);
         }
         drawLines(o, givenLines(d, targetVals(S.pips[i]) || {}, b, W, H).lines, 'dim', 'dimtxt', 'far', fs, W, H);
-        const hs = fs * .7;
-        if (!all && !(S.pips[i].same && relOf(S.pips[i]))) o.push(`<rect class="handle" data-i="${i}" data-h="1" x="${r(x + w - hs / 2)}" y="${r(y + h - hs / 2)}" width="${r(hs)}" height="${r(hs)}" rx="${r(hs / 5)}"/>`);
       }
     }
     // where the target's 0,0 sits
@@ -605,7 +644,20 @@
     const shown = svg.getBoundingClientRect().width || 800;
     const fs = Math.max(Math.max(W, H * 16 / 9) / 60, 12 * W / shown);
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.innerHTML = scene(W, H, fs, false, BG.url).join('');   // a short blob: URL, so redraws while dragging stay cheap
+    const o = scene(W, H, fs, false, BG.url);   // a short blob: URL, so redraws while dragging stay cheap
+    if (drag && drag.snap) {
+      const sn = drag.snap, ve = 'vector-effect="non-scaling-stroke"';
+      if (sn.x !== undefined) o.push(`<path class="snap" d="M${sn.x * W} 0V${H}" ${ve}/>`);
+      if (sn.y !== undefined) o.push(`<path class="snap" d="M0 ${sn.y * H}H${W}" ${ve}/>`);
+      // equal gaps: a bar with end ticks for each, along the axis it was measured on
+      const k = fs * .35;
+      for (const g of sn.gaps || []) {
+        if (Math.abs(g.z - g.a) < 1e-6) continue;
+        if (g.ax === 'x') { const y = g.at * H; o.push(`<path class="snap gap" d="M${g.a * W} ${y}H${g.z * W}M${g.a * W} ${y - k}V${y + k}M${g.z * W} ${y - k}V${y + k}" ${ve}/>`); }
+        else { const x = g.at * W; o.push(`<path class="snap gap" d="M${x} ${g.a * H}V${g.z * H}M${x - k} ${g.a * H}H${x + k}M${x - k} ${g.z * H}H${x + k}" ${ve}/>`); }
+      }
+    }
+    svg.innerHTML = o.join('');
     $('#png').textContent = `Download PNG · ${W}×${H}`;
     updateExportState();
     const p = S.pips[sel];
@@ -617,8 +669,8 @@
   svg.addEventListener('pointerdown', e => {
     const el = e.target.closest('[data-i]'); if (!el) return;
     const i = +el.dataset.i, p = S.pips[i]; if (!p || !p.box) return;
-    select(i);
-    drag = { i, resize: !!el.dataset.h, p0: frac(e), b0: Object.assign({}, p.box) };
+    select(i); svg.focus({ preventScroll: true });
+    drag = { i, resize: el.dataset.h ? SM.POINTS[el.dataset.h] : null, p0: frac(e), b0: Object.assign({}, p.box), targets: snapTargets(p) };
     svg.setPointerCapture(e.pointerId); e.preventDefault();
   });
   svg.addEventListener('pointermove', e => {
@@ -626,12 +678,20 @@
     const pt = frac(e), dx = pt.x - drag.p0.x, dy = pt.y - drag.p0.y, b0 = drag.b0;
     const p = S.pips[drag.i];
     if (drag.resize && p.same && relOf(p)) return;
+    const r = S.src.W / S.src.H, free = e.altKey;   // Alt: no snapping
+    const rc = svg.getBoundingClientRect(), T = drag.targets, tx = 8 / rc.width, ty = 8 / rc.height;
+    drag.snap = {};
     let b;
-    if (!drag.resize) b = { l: b0.l + dx, t: b0.t + dy, w: b0.w, h: b0.h };
-    else {
-      const w = Math.max(0.01, b0.w + dx);
-      b = { l: b0.l, t: b0.t, w, h: p.lock ? w * (S.src.W / S.src.H) / p.aspect : Math.max(0.01, b0.h + dy) };
-    }
+    if (!drag.resize) {
+      // snap edges and centres to the frame and to other PiPs within 8 screen px
+      b = { l: b0.l + dx, t: b0.t + dy, w: b0.w, h: b0.h };
+      // (or to equal gaps on both sides / the gap next door)
+      const sx = !free && closer(snapTo([b.l, b.l + b.w / 2, b.l + b.w], T.xs, tx), equalMove(T, 'x', b, tx));
+      const sy = !free && closer(snapTo([b.t, b.t + b.h / 2, b.t + b.h], T.ys, ty), equalMove(T, 'y', b, ty));
+      if (sx) b.l += sx.d;
+      if (sy) b.t += sy.d;
+      showSnap(drag.snap, 'x', sx); showSnap(drag.snap, 'y', sy);
+    } else b = resizeBox(b0, drag.resize, dx, dy, p.lock ? p.aspect / r : 0, free ? null : { T, tx, ty }, drag.snap);
     const sp = srcFor(p);
     p.vals = fmtVals(sp, SM.fromBox(sp, b, refBox(p)));   // rounded to the source's decimals, so it snaps
     resolveAll();                                          // rows hanging off this one follow it
@@ -639,7 +699,116 @@
   });
   // label size depends on the on-screen width, so redraw when it changes
   if (window.ResizeObserver) { let lastW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width); if (w !== lastW) { lastW = w; renderPreview(); } }).observe(svg.parentNode); }
-  const endDrag = () => { if (drag) { drag = null; save(); } };
+  const endDrag = () => { if (drag) { drag = null; save(); renderPreview(); } };
+  /* Resize from handle [hx, hy] (0, .5 or 1 on each axis) by dx/dy. The opposite handle stays put.
+     With an aspect (box w/h in frame fractions) the PiP keeps its shape: an edge handle scales around the middle of the opposite edge,
+     a corner follows whichever side moved more, or whichever side snapped. snap = { T, tx, ty } or null; the snapped lines go into out. */
+  function resizeBox(b0, [hx, hy], dx, dy, aspect, snap, out) {
+    const MIN = 0.01;
+    const mx = hx !== .5, my = hy !== .5;
+    // where the moving edges end up
+    let ex = mx ? b0.l + hx * b0.w + dx : null, ey = my ? b0.t + hy * b0.h + dy : null;
+    const sx = snap && mx && closer(snapTo([ex], snap.T.xs, snap.tx), equalEdge(snap.T, 'x', b0, hx, ex, snap.tx));
+    const sy = snap && my && closer(snapTo([ey], snap.T.ys, snap.ty), equalEdge(snap.T, 'y', b0, hy, ey, snap.ty));
+    if (sx) ex += sx.d;
+    if (sy) ey += sy.d;
+    const fx = b0.l + (1 - hx) * b0.w, fy = b0.t + (1 - hy) * b0.h;   // the fixed point
+    let w = mx ? Math.max(MIN, (ex - fx) * (hx ? 1 : -1)) : b0.w;
+    let h = my ? Math.max(MIN, (ey - fy) * (hy ? 1 : -1)) : b0.h;
+    let byX = mx;
+    if (aspect) {
+      if (mx && my) byX = sx && sy ? Math.abs(sx.d) / snap.tx <= Math.abs(sy.d) / snap.ty : sx ? true : sy ? false : w / aspect >= h;
+      if (byX) h = w / aspect; else w = h * aspect;
+    }
+    const b = { l: fx - (1 - hx) * w, t: fy - (1 - hy) * h, w, h };
+    if (!aspect || byX) showSnap(out, 'x', sx);
+    if (!aspect || !byX) showSnap(out, 'y', sy);
+    return b;
+  }
+  /* Snap menu: per browser, not part of the layout or undo. */
+  const SNAPKEY = 'screen-margins:v1:snap';
+  const SNAP = { frame: true, pips: true, equal: true };
+  try { Object.assign(SNAP, JSON.parse(localStorage.getItem(SNAPKEY)) || {}); } catch (e) { /* defaults */ }
+  document.querySelectorAll('[data-snap]').forEach(c => {
+    c.checked = !!SNAP[c.dataset.snap];
+    c.addEventListener('change', () => { SNAP[c.dataset.snap] = c.checked; try { localStorage.setItem(SNAPKEY, JSON.stringify(SNAP)); } catch (e) { /* private mode */ } snapLabel(); });
+  });
+  function snapLabel() { const n = Object.values(SNAP).filter(Boolean).length; $('#snapsum').textContent = n ? 'Snap' : 'Snap: off'; }
+  snapLabel();
+  document.addEventListener('click', e => { const m = $('#snapmenu'); if (m.open && !m.contains(e.target)) m.open = false; });
+  /* What a dragged PiP snaps to, as picked in the Snap menu: frame edges and centre lines, the edges and centres of PiPs that
+     don't move with it, and equal gaps. Equal gaps are measured to the frame edges, the centre lines and (with PiPs on) other PiPs. */
+  function snapTargets(p) {
+    const xs = SNAP.frame ? [0, .5, 1] : [], ys = SNAP.frame ? [0, .5, 1] : [], boxes = [];
+    if (SNAP.pips) S.pips.forEach(q => {
+      if (q === p || !validBox(q.box) || dependsOn(q, p)) return;
+      boxes.push(q.box);
+      xs.push(q.box.l, q.box.l + q.box.w / 2, q.box.l + q.box.w); ys.push(q.box.t, q.box.t + q.box.h / 2, q.box.t + q.box.h);
+    });
+    return { xs, ys, boxes, equal: SNAP.equal };
+  }
+  const closer = (a, b) => a && b ? (Math.abs(b.d) < Math.abs(a.d) - 1e-9 ? b : a) : a || b;
+  /* Per axis: lo = position, sz = size, and the same for the other axis. */
+  const AX = { x: { lo: 'l', sz: 'w', clo: 't', csz: 'h' }, y: { lo: 't', sz: 'h', clo: 'l', csz: 'w' } };
+  /* Things along an axis that a gap can be measured to, for a box: frame edges, the centre line, PiPs beside it (overlapping across). */
+  function obstacles(T, ax, b, withMid) {
+    const A = AX[ax], c0 = b[A.clo], c1 = c0 + b[A.csz];
+    const o = [{ a0: -1, a1: 0 }, { a0: 1, a1: 2 }];
+    if (withMid) o.push({ a0: .5, a1: .5 });
+    T.boxes.forEach(q => { if (q !== b && q[A.clo] < c1 - 1e-9 && q[A.clo] + q[A.csz] > c0 + 1e-9) o.push({ a0: q[A.lo], a1: q[A.lo] + q[A.sz], q }); });
+    return o;
+  }
+  const before = (o, x, tol) => o.filter(k => k.a1 <= x + tol && k.a0 < x).reduce((m, k) => !m || k.a1 > m.a1 ? k : m, null);
+  const after = (o, x, tol) => o.filter(k => k.a0 >= x - tol && k.a1 > x).reduce((m, k) => !m || k.a0 < m.a0 ? k : m, null);
+  const mid = (b, ax) => b[AX[ax].clo] + b[AX[ax].csz] / 2;
+  /* Moving: centre the box between its neighbours, or repeat the gap a neighbour has on its far side. */
+  function equalMove(T, ax, b, thr) {
+    if (!T.equal) return null;
+    // once with the centre line as a neighbour, once without (so two PiPs either side of it can still match)
+    return [true, false].map(w => equalMoveIn(T, ax, b, thr, w)).reduce(closer, null);
+  }
+  function equalMoveIn(T, ax, b, thr, withMid) {
+    const A = AX[ax], lo = b[A.lo], sz = b[A.sz], hi = lo + sz, o = obstacles(T, ax, b, withMid), at = mid(b, ax);
+    const L = before(o, lo, thr), R = after(o, hi, thr), c = [];
+    if (L && R && R.a0 - L.a1 >= sz) { const g = (R.a0 - L.a1 - sz) / 2; c.push({ lo: L.a1 + g, gaps: [[L.a1, L.a1 + g, at], [R.a0 - g, R.a0, at]] }); }
+    if (L && L.q) {
+      const LL = before(obstacles(T, ax, L.q, withMid), L.a0, 1e-9);
+      if (LL) { const g = L.a0 - LL.a1; c.push({ lo: L.a1 + g, gaps: [[LL.a1, L.a0, mid(L.q, ax)], [L.a1, L.a1 + g, at]] }); }
+    }
+    if (R && R.q) {
+      const RR = after(obstacles(T, ax, R.q, withMid), R.a1, 1e-9);
+      if (RR) { const g = RR.a0 - R.a1; c.push({ lo: R.a0 - g - sz, gaps: [[R.a1, RR.a0, mid(R.q, ax)], [R.a0 - g, R.a0, at]] }); }
+    }
+    return c.map(k => ({ d: k.lo - lo, gaps: k.gaps })).filter(k => Math.abs(k.d) <= thr).reduce(closer, null);
+  }
+  /* Resizing: put the moving edge (side 0 = low, 1 = high, now at e) as far from its neighbour as the fixed edge is from its own. */
+  function equalEdge(T, ax, b0, side, e, thr) {
+    if (!T.equal) return null;
+    return [true, false].map(w => equalEdgeIn(T, ax, b0, side, e, thr, w)).reduce(closer, null);
+  }
+  function equalEdgeIn(T, ax, b0, side, e, thr, withMid) {
+    const A = AX[ax], lo = b0[A.lo], hi = lo + b0[A.sz], o = obstacles(T, ax, b0, withMid), at = mid(b0, ax);
+    let t, gaps;
+    if (side === 1) {
+      const L = before(o, lo, 1e-9), R = after(o, e, thr); if (!L || !R) return null;
+      t = R.a0 - (lo - L.a1); gaps = [[L.a1, lo, at], [t, R.a0, at]];
+    } else {
+      const R = after(o, hi, 1e-9), L = before(o, e, thr); if (!L || !R) return null;
+      t = L.a1 + (R.a0 - hi); gaps = [[L.a1, t, at], [hi, R.a0, at]];
+    }
+    return Math.abs(t - e) <= thr ? { d: t - e, gaps } : null;
+  }
+  /* Remember what to draw for a snap: a line across the canvas, or the equal gaps. */
+  function showSnap(out, ax, sn) {
+    if (!sn) return;
+    if (sn.gaps) (out.gaps = out.gaps || []).push(...sn.gaps.map(([a, z, at]) => ({ ax, a, z, at })));
+    else out[ax] = sn.t;
+  }
+  function snapTo(edges, targets, thr) {
+    let best = null;
+    for (const v of edges) for (const t of targets) { const d = t - v; if (Math.abs(d) <= thr && (!best || Math.abs(d) < Math.abs(best.d))) best = { d, t }; }
+    return best;
+  }
   svg.addEventListener('pointerup', endDrag);
   svg.addEventListener('pointercancel', endDrag);
 
@@ -913,6 +1082,133 @@
     copy(rows.join('\n'), `Copied ${S.pips.length} row${S.pips.length === 1 ? '' : 's'}`);
   });
 
+  /* ---------- share links ----------
+     The profiles and PiPs (not saved profiles, not the background) go into the URL after #s=, deflated and base64url-encoded.
+     Opening one replaces the current layout; Undo brings the old one back. */
+  const b64u = bytes => { let t = ''; bytes.forEach(b => { t += String.fromCharCode(b); }); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const unb64u = str => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  async function pipe(bytes, stream) {
+    const w = stream.writable.getWriter();
+    w.write(bytes).catch(() => {}); w.close().catch(() => {});   // a damaged link fails on the reading side
+    const r = stream.readable.getReader(), parts = [];
+    for (;;) { const { done, value } = await r.read(); if (done) break; parts.push(value); }
+    const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+    parts.reduce((at, p) => { out.set(p, at); return at + p.length; }, 0);
+    return out;
+  }
+  function shareData() {
+    const prof = p => { const o = clone(p); delete o.name; return o; };
+    return { v: 1, src: prof(S.src), dst: prof(S.dst),
+      pips: S.pips.map(p => ({ id: p.id, name: p.name, mode: p.mode, vals: p.vals, lock: p.lock, aspect: p.aspect, same: !!p.same })) };
+  }
+  async function shareCode() {
+    const raw = new TextEncoder().encode(JSON.stringify(shareData()));
+    return window.CompressionStream ? 'z' + b64u(await pipe(raw, new CompressionStream('deflate-raw'))) : 'j' + b64u(raw);
+  }
+  async function readCode(code) {
+    const bytes = unb64u(code.slice(1));
+    const raw = code[0] === 'z' ? await pipe(bytes, new DecompressionStream('deflate-raw')) : bytes;
+    return JSON.parse(new TextDecoder().decode(raw));
+  }
+  /* A link can come from anyone: keep only known fields with sane values. */
+  const ENUMS = { unit: UNITS.map(u => u[0]), pos: POS.map(u => u[0]), size: SIZES.map(u => u[0]), origin: Object.keys(SM.POINTS), anchor: Object.keys(SM.POINTS),
+    edgeX: ['left', 'right'], edgeY: ['top', 'bottom'], relFrom: Object.keys(SM.POINTS), relTo: Object.keys(SM.POINTS), preset: ['', ...PRESETS.map(x => x.id)] };
+  const str = (v, n) => typeof v === 'string' ? v.slice(0, n) : typeof v === 'number' && isFinite(v) ? String(v) : '';
+  function cleanProfile(o) {
+    const d = SM.defaultProfile(), p = {};
+    o = o && typeof o === 'object' ? o : {};
+    for (const k of Object.keys(d)) {
+      const v = o[k];
+      if (ENUMS[k]) p[k] = ENUMS[k].includes(v) ? v : d[k];
+      else if (k === 'name') p[k] = '';
+      else if (k === 'yUp' || k === 'uniform') p[k] = !!v;
+      else if (k === 'range') p[k] = Object.fromEntries(['left', 'right', 'top', 'bottom'].map(e => [e, isFinite(+(v || {})[e]) ? +(v || {})[e] : d.range[e]]));
+      else if (k === 'labels') p[k] = Object.fromEntries(Object.entries(v && typeof v === 'object' ? v : {}).filter(([a]) => /^\w{1,4}$/.test(a)).map(([a, b]) => [a, str(b, 40)]));
+      else p[k] = isFinite(+v) && v !== '' && v !== null ? +v : d[k];
+    }
+    p.decimals = Math.max(0, Math.min(6, Math.round(p.decimals)));
+    if (!(p.W > 0)) p.W = d.W; if (!(p.H > 0)) p.H = d.H;
+    return p;
+  }
+  const MODE_RE = /^(|anchor:(tl|tc|tr|ml|c|mr|bl|bc|br)|edges:(left|right):(top|bottom)|insets|corners|rel:\d{1,6}:(tl|tc|tr|ml|c|mr|bl|bc|br):(tl|tc|tr|ml|c|mr|bl|bc|br))$/;
+  function cleanShared(d) {
+    if (!d || typeof d !== 'object' || !Array.isArray(d.pips)) throw new Error('not a layout');
+    const ids = new Set();
+    const pips = d.pips.slice(0, 500).map(q => {
+      q = q && typeof q === 'object' ? q : {};
+      let id = Math.floor(+q.id); if (!(id > 0) || ids.has(id)) id = 0; else ids.add(id);
+      const vals = {};
+      Object.entries(q.vals && typeof q.vals === 'object' ? q.vals : {}).forEach(([k, v]) => { if (/^\w{1,4}$/.test(k)) vals[k] = str(v, 60); });
+      return { id, name: str(q.name, 80), mode: MODE_RE.test(q.mode || '') ? q.mode || '' : '', vals, lock: q.lock !== false, aspect: +q.aspect > 0 ? +q.aspect : undefined, same: !!q.same };
+    });
+    return { src: cleanProfile(d.src), dst: cleanProfile(d.dst), pips };
+  }
+  $('#share').addEventListener('click', () => {
+    if (saveT) saveNow();
+    const msg = `Link copied${BG.data ? ' · the background image isn’t included' : ''}`;
+    const url = shareCode().then(c => location.href.split('#')[0] + '#s=' + c);
+    // Safari only lets a click write the clipboard straight away, so hand it the link as a promise when it can take one
+    if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write && window.isSecureContext) {
+      navigator.clipboard.write([new ClipboardItem({ 'text/plain': url.then(u => new Blob([u], { type: 'text/plain' })) })])
+        .then(() => toast(msg), () => url.then(u => copy(u, msg)));
+    } else url.then(u => copy(u, msg), e => toast('Couldn’t make a link: ' + e.message, 3500));
+  });
+  async function openShared() {
+    const m = /^#s=([zj][\w-]+)$/.exec(location.hash); if (!m) return;
+    history.replaceState(null, '', location.href.split('#')[0]);   // a reload keeps your own edits, not the link
+    try {
+      const d = cleanShared(await readCode(m[1]));
+      if (saveT) saveNow();
+      replaceState(Object.assign(d, { saved: S.saved }));
+      sel = 0; renderTable(); renderPreview(); saveNow();
+      toast(`Opened a shared layout with ${d.pips.length} PiP${d.pips.length === 1 ? '' : 's'}${hist.at > 0 ? ` · ${MODK}Z brings yours back` : ''}`, 4000);
+    } catch (e) { toast('That share link is damaged or incomplete', 4000); }
+  }
+  addEventListener('hashchange', openShared);
+
+  /* ---------- keyboard: undo / redo, nudging ---------- */
+  const MODK = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent) ? '⌘' : 'Ctrl+';
+  const typing = el => el && el.matches && el.matches('input:not([type=checkbox]):not([type=range]), textarea, select, [contenteditable]');
+  /* Move (or with resize, grow) the selected PiP by whole source pixels. If the source's decimals swallow that, take the smallest step that shows. */
+  function nudge(dx, dy, resize) {
+    const p = S.pips[sel]; if (!p || !validBox(p.box) || (resize && p.same && relOf(p))) return;
+    const b0 = Object.assign({}, p.box), sp = srcFor(p), r = +S.src.W / +S.src.H;
+    for (let k = 1; k <= 4096; k *= 2) {
+      const fx = dx * k / +S.src.W, fy = dy * k / +S.src.H;
+      let b;
+      if (!resize) b = Object.assign({}, b0, { l: b0.l + fx, t: b0.t + fy });
+      else if (p.lock) {
+        const w = fx ? b0.w + fx : (b0.h + fy) * p.aspect / r;
+        b = Object.assign({}, b0, { w, h: w * r / p.aspect });
+      } else b = Object.assign({}, b0, { w: b0.w + fx, h: b0.h + fy });
+      if (!(b.w > 0 && b.h > 0)) return;
+      const vals = fmtVals(sp, SM.fromBox(sp, b, refBox(p)));
+      const nb = SM.toBox(sp, vals, refBox(p));
+      if (nb && ['l', 't', 'w', 'h'].some(e => Math.abs(nb[e] - b0[e]) > 1e-12)) {
+        p.vals = vals; resolveAll(); updateAll(); renderPreview(); save();
+        return;
+      }
+    }
+  }
+  svg.setAttribute('tabindex', '0');
+  svg.setAttribute('aria-label', 'Preview. Arrow keys move the selected PiP, Shift for 10 px, Alt to resize.');
+  document.addEventListener('keydown', e => {
+    const mod = e.ctrlKey || e.metaKey, k = e.key.toLowerCase();
+    if (mod && !e.altKey && (k === 'z' || k === 'y')) {
+      // our own undo everywhere, also in fields: they write to the layout as you type
+      e.preventDefault();
+      step(k === 'y' || e.shiftKey ? 1 : -1);
+      return;
+    }
+    const dir = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] }[k];
+    if (!dir || mod || document.activeElement !== svg) return;
+    e.preventDefault();
+    const n = e.shiftKey ? 10 : 1;
+    nudge(dir[0] * n, dir[1] * n, e.altKey);
+  });
+  $('#undo').addEventListener('click', () => step(-1));
+  $('#redo').addEventListener('click', () => step(1));
+
   /* Number fields take sums (200+10, 1920/2-320). The result is used as you type;
      Enter or leaving the field replaces the sum with it. */
   function commitExpr(e) {
@@ -932,5 +1228,6 @@
   document.addEventListener('change', commitExpr, true);
 
   bindProfile('src'); bindProfile('dst'); bindTable();
-  renderProfile('src'); renderProfile('dst'); renderTable(); renderPreview();
+  renderProfile('src'); renderProfile('dst'); renderTable(); renderPreview(); undoState();
+  openShared();
 })();
