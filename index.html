@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Screen margins</title>
+<meta name="description" content="Convert PiP positions and sizes between documentation and video switcher coordinate systems.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23151517'/%3E%3Crect x='5' y='8' width='22' height='16' rx='2' fill='none' stroke='%237c7c85' stroke-width='2'/%3E%3Crect x='15' y='15' width='9' height='6' rx='1' fill='%23ef4b55'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0c0c0e;
+  --surface-1: #151517;
+  --surface-2: #1c1c1f;
+  --surface-3: #252529;
+  --border: #2a2a2f;
+  --grid: #26262a;
+  --text-primary: #f3f3f4;
+  --text-secondary: #b3b3ba;
+  --text-muted: #7c7c85;
+  --accent: #ef4b55;
+  --accent-strong: #ff5f68;
+  --accent-soft: rgba(239, 75, 85, .14);
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --radius: 12px;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text-primary); font: 14px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; cursor: pointer; }
+.muted { color: var(--text-muted); }
+.hidden { display: none !important; }
+
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 16px 48px; }
+header.top { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 280px; }
+.logo { width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); display: grid; place-items: center; flex: none; }
+.brand h1 { margin: 0; font-size: 18px; font-weight: 650; letter-spacing: -.01em; }
+.brand .hw { color: var(--text-secondary); font-size: 12.5px; }
+.btn { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; font-size: 13px; white-space: nowrap; }
+.btn:hover { border-color: #3a3a40; background: var(--surface-3); }
+.btn.primary { background: var(--accent-soft); border-color: rgba(239, 75, 85, .45); color: var(--accent-strong); }
+.btn.primary:hover { background: rgba(239, 75, 85, .22); }
+.btn.sm { padding: 5px 10px; font-size: 12.5px; }
+
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-secondary); font-weight: 600; margin: 26px 0 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+h2 .count { color: var(--text-muted); font-weight: 500; letter-spacing: 0; text-transform: none; }
+h2::before { content: ""; width: 3px; height: 13px; background: var(--accent); border-radius: 2px; }
+h2 .right { margin-left: auto; display: flex; gap: 8px; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); }
+
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+@media (max-width: 960px) { .cols2, .layout { grid-template-columns: minmax(0, 1fr); } }
+.cols2 > section > h2:first-child, .layout > section > h2:first-child { margin-top: 0; }
+
+/* forms */
+.form { padding: 16px; }
+.form h3 { margin: 16px 0 10px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); padding-top: 14px; border-top: 1px solid var(--border); }
+.row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.row.one { grid-template-columns: minmax(0, 1fr); }
+.row.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.field label, .field .lbl { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 5px; }
+.unit { position: relative; }
+.unit span { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 12px; pointer-events: none; }
+.unit input { padding-right: 34px; }
+input[type=number], input[type=text], select { width: 100%; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; color: var(--text-primary); font: inherit; font-variant-numeric: tabular-nums; min-width: 0; }
+input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input:focus, select:focus, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input.bad { border-color: var(--critical); }
+.chk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 10px; cursor: pointer; }
+.chk input { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; }
+.field .chk { margin: 0; height: 37px; }
+.hint { font-size: 12px; color: var(--text-muted); margin: 0 0 4px; }
+.axes { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; background: var(--surface-2); border-radius: 8px; padding: 7px 10px; }
+.axes b { color: var(--text-secondary); font-weight: 600; }
+.saved { display: flex; gap: 8px; }
+.saved select { flex: 1; }
+.presetnote { margin: 8px 0 0; line-height: 1.45; }
+.ratio { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; color: var(--text-muted); }
+
+/* preview */
+.preview { padding: 14px; }
+#pv { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+.preview .bar { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.preview .bar b { color: var(--text-secondary); font-weight: 600; }
+svg .frame { fill: #101012; stroke: #3a3a40; }
+svg .guide { stroke: var(--grid); }
+svg .pip { fill-opacity: .2; stroke-width: 2; cursor: move; }
+svg .pip.sel { fill-opacity: .32; stroke-width: 3; }
+svg .handle { fill: var(--text-primary); cursor: nwse-resize; }
+svg .lbl { fill: var(--text-primary); font-family: var(--sans); font-weight: 600; pointer-events: none; }
+svg .dim { stroke: var(--text-secondary); stroke-dasharray: 5 4; stroke-width: 1.5; fill: none; pointer-events: none; }
+svg .dimtxt { fill: var(--text-secondary); font-family: var(--sans); font-variant-numeric: tabular-nums; pointer-events: none; paint-order: stroke; stroke: #101012; stroke-width: 4px; }
+svg .anchor { fill: none; stroke: var(--text-primary); stroke-width: 2; pointer-events: none; }
+svg .origin { stroke: var(--accent-strong); stroke-width: 2; }
+svg .origintxt { fill: var(--accent-strong); font-family: var(--sans); font-weight: 600; }
+svg .given { stroke: var(--text-primary); stroke-width: 2; fill: none; pointer-events: none; }
+svg .giventxt { fill: var(--text-primary); font-family: var(--sans); font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; paint-order: stroke; stroke: #101012; stroke-width: 4px; }
+svg .srcpt { fill: var(--text-primary); stroke: #101012; stroke-width: 1.5; pointer-events: none; }
+svg .modetxt { fill: var(--text-secondary); font-family: var(--sans); pointer-events: none; }
+svg .ghost { fill: none; stroke: var(--warning); stroke-dasharray: 8 6; stroke-width: 2; pointer-events: none; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { flex: none; width: auto; height: 12px; }
+
+/* table */
+.tbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
+.tbar .grow { flex: 1; }
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; padding-top: 9px; }
+th.grp { font-size: 11px; color: var(--text-secondary); text-transform: none; letter-spacing: 0; border-bottom: 0; padding-bottom: 0; }
+th:first-child, td:first-child { padding-left: 14px; }
+th:last-child, td:last-child { padding-right: 14px; }
+tr:last-child td { border-bottom: 0; }
+tr.sel td { background: var(--surface-2); }
+td input[type=text] { padding: 6px 8px; min-width: 70px; }
+td input.name { min-width: 110px; }
+td select.mode { padding: 6px 8px; min-width: 150px; width: auto; }
+td .cell { display: block; }
+td .pair { display: flex; gap: 6px; align-items: center; }
+td .cell > span { white-space: nowrap; overflow: visible; }
+td .cell .lockratio { font-style: normal; color: var(--accent-strong); font-variant-numeric: tabular-nums; }
+.lock { flex: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; width: 30px; height: 31px; display: inline-grid; place-items: center; color: var(--text-muted); padding: 0; }
+.lock:hover { color: var(--text-primary); border-color: #3a3a40; }
+.lock[aria-pressed="true"] { color: var(--accent-strong); background: var(--accent-soft); border-color: rgba(239, 75, 85, .45); }
+.lock:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+td .cell span { display: block; font-size: 10.5px; color: var(--text-muted); margin: 0 0 2px 2px; }
+td.sep { color: var(--text-muted); text-align: center; padding: 0 2px; }
+td.out { cursor: copy; font-family: var(--mono); font-size: 13px; color: var(--text-primary); padding: 6px 10px; border-radius: 6px; min-width: 70px; }
+td.out:hover { background: var(--accent-soft); }
+td.out.na { color: var(--text-muted); }
+.dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 6px; vertical-align: middle; }
+.idx { color: var(--text-muted); font-size: 12px; }
+.x { background: none; border: 0; color: var(--text-muted); font-size: 16px; padding: 2px 6px; border-radius: 6px; }
+.x:hover { color: var(--critical); background: var(--surface-3); }
+.warnicon { color: var(--warning); cursor: help; font-weight: 700; }
+.banner { display: flex; gap: 10px; padding: 10px 14px; font-size: 12.5px; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+.banner b { color: var(--warning); }
+.empty { padding: 26px 14px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+details.gen summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--text-secondary); font-weight: 600; }
+details.gen summary::-webkit-details-marker { display: none; }
+details.gen summary::after { content: "Show"; font-weight: 500; color: var(--text-muted); }
+details.gen[open] summary::after { content: "Hide"; }
+details.gen[open] summary { margin-bottom: 12px; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--surface-3); border: 1px solid #36363c; border-radius: 8px; padding: 8px 14px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.45); opacity: 0; transition: opacity .15s; pointer-events: none; z-index: 10; }
+.toast.on { opacity: 1; }
+.notes { padding: 14px 18px; color: var(--text-secondary); font-size: 13px; }
+.notes ul { margin: 0; padding-left: 18px; }
+.notes li { margin: 5px 0; }
+.notes b { color: var(--text-primary); font-weight: 600; }
+.foot a { color: inherit; }
+.foot a:hover { color: var(--accent-strong); }
+.foot { margin: 32px 0 8px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="logo"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="1.5" y="3.5" width="17" height="13" rx="1.5" stroke="#7c7c85" stroke-width="1.6"/><rect x="10" y="9.5" width="6.5" height="5" rx="1" fill="#ef4b55"/></svg></div>
+      <div>
+        <h1>Screen margins</h1>
+        <div class="hw">Convert PiP positions and sizes between how they're documented and how the switcher wants them</div>
+      </div>
+    </div>
+    <button class="btn" id="swap" type="button" title="Swap source and target profiles; your PiPs keep their place on screen">Swap source ⇄ target</button>
+  </header>
+
+  <div class="cols2">
+    <section>
+      <h2>Source <span class="count">how the numbers are given to you</span></h2>
+      <div class="card form" id="prof-src"></div>
+    </section>
+    <section>
+      <h2>Target <span class="count">how the switcher wants them</span></h2>
+      <div class="card form" id="prof-dst"></div>
+    </section>
+  </div>
+
+  <h2>PiPs <span class="count" id="pipcount"></span>
+    <span class="right">
+      <button class="btn sm" id="copyall" type="button" title="Copy names and target values as a tab-separated table (pastes into Excel/Numbers)">Copy results</button>
+      <button class="btn sm" id="clearall" type="button">Clear all</button>
+      <button class="btn sm primary" id="add" type="button">+ Add PiP</button>
+    </span>
+  </h2>
+  <div class="card">
+    <div id="banner"></div>
+    <div class="tbl-wrap"><table id="tbl"></table></div>
+  </div>
+  <p class="hint" style="margin-top:8px">Paste straight from a spreadsheet or PDF table into any source cell: tabs/columns and lines fill neighbouring cells and add rows as needed. Click a target value to copy it.</p>
+
+  <div class="layout">
+    <section>
+      <h2>Preview <span class="count">drag to move, corner handle to resize</span></h2>
+      <div class="card preview">
+        <div class="bar" id="pvbar"></div>
+        <svg id="pv"></svg>
+        <div class="legend">
+          <span><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2L12 7L7 12L2 7Z" fill="#f3f3f4"/></svg> point the source numbers refer to</span>
+          <span><svg width="22" height="12" viewBox="0 0 22 12"><path d="M1 6h20M1 2v8M21 2v8" stroke="#f3f3f4" stroke-width="2"/></svg> what each source number measures (selected PiP)</span>
+          <span><svg width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="4.5" fill="none" stroke="#f3f3f4" stroke-width="2"/></svg> point the target position refers to</span>
+          <span><svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 7h12M7 1v12" stroke="#ff5f68" stroke-width="2"/></svg> target 0,0</span>
+          <span><svg width="22" height="12" viewBox="0 0 22 12"><path d="M1 6h20M1 2v8M21 2v8" stroke="#b3b3ba" stroke-width="1.5" stroke-dasharray="4 3"/></svg> what each target number measures (selected PiP)</span>
+        </div>
+      </div>
+    </section>
+    <section>
+      <h2>Layout generator</h2>
+      <div class="card form">
+        <details class="gen" id="gen">
+          <summary>Equal PiPs with margins and gaps</summary>
+          <div class="row">
+            <div class="field"><label for="g-count">Number of PiPs</label><input type="number" id="g-count" value="4" min="1" max="64"></div>
+            <div class="field"><label for="g-cols">Columns</label><input type="number" id="g-cols" placeholder="auto" min="1" max="64"></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="g-mx">Outer margin left/right</label><div class="unit"><input type="number" id="g-mx" value="40" step="any"><span>px</span></div></div>
+            <div class="field"><label for="g-my">Outer margin top/bottom</label><div class="unit"><input type="number" id="g-my" value="40" step="any"><span>px</span></div></div>
+          </div>
+          <div class="row">
+            <div class="field"><label for="g-gx">Gap between columns</label><div class="unit"><input type="number" id="g-gx" value="20" step="any"><span>px</span></div></div>
+            <div class="field"><label for="g-gy">Gap between rows</label><div class="unit"><input type="number" id="g-gy" value="20" step="any"><span>px</span></div></div>
+          </div>
+          <div class="row">
+            <div class="field"><label>PiP aspect</label><div class="ratio"><input type="number" id="g-aw" value="16" min="0" step="any" aria-label="Aspect width"><span>:</span><input type="number" id="g-ah" value="9" min="0" step="any" aria-label="Aspect height"></div></div>
+            <div class="field"><span class="lbl">&nbsp;</span><label class="chk"><input type="checkbox" id="g-stretch"> Fill cells, ignore aspect</label></div>
+          </div>
+          <p class="hint" id="g-hint">Pixels of the source canvas. PiPs are as large as fits, centred; a short last row is centred too. The dashed outlines in the preview show the result.</p>
+          <div class="btns" style="margin-top:10px">
+            <button class="btn primary" id="g-replace" type="button">Replace PiPs</button>
+            <button class="btn" id="g-append" type="button">Add to PiPs</button>
+          </div>
+        </details>
+      </div>
+      <h2>How it reads numbers</h2>
+      <div class="card notes">
+        <ul>
+          <li><b>Unit + origin</b> say what the numbers mean on the frame: where 0,0 is, which way Y counts, and what the frame edges are worth. Use <b>Custom range</b> when a device has its own scale (e.g. −16…16 across).</li>
+          <li><b>Position</b> says which point of the PiP the numbers locate: its top-left, its centre, the distance from a frame edge, or all four edges. The source sets the default; change it per PiP in the table when a document mixes formats.</li>
+          <li><b>Size</b> is in the same units as positions, or as a scale where 1 (or 100 %) is the full frame. The <b>lock</b> between W and H keeps a PiP’s aspect: type whichever is given and the other follows. <b>One size value</b> on the target is for switchers that only take a single scale.</li>
+          <li>Frames of different resolution are scaled (a 4K document converts to an HD switcher). Both sides keep the same frame; nothing is cropped or letterboxed.</li>
+        </ul>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">Screen margins · everything stays in this browser · <a href="https://github.com/greatmastix/Screen-margins/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a> · <a href="https://github.com/greatmastix/Screen-margins" target="_blank" rel="noopener">Source on GitHub</a></footer>
+</div>
+<div class="toast" id="toast"></div>
+<script src="convert.js"></script>
+<script src="presets.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
